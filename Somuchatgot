@@ -1,2 +1,57 @@
-test1
-saikumar
+# Connect to SharePoint Online
+$SiteName = "KH-CIS/Cisknet"
+Connect-PnPOnline -Url "https://cognizantonline.sharepoint.com/sites/$SiteName" -Interactive
+
+# Get all site pages
+$sitePages = Get-PnPListItem -List "Site Pages"
+
+# Initialize row index counter
+$rowIndex = 0
+
+# Create an array to store the page information
+$pageInfo = @()
+
+# Get the current date
+$currentDate = Get-Date
+# Get the first day of the current month
+$startDate = Get-Date -Year $currentDate.Year -Month $currentDate.Month -Day 1
+# Get the first day of the next month
+$endDate = $startDate.AddMonths(1)
+
+# Loop through each site page
+foreach ($page in $sitePages) {
+    # Construct the URL for querying page views, including date range filter
+    $pageViewUrl = "https://cognizantonline.sharepoint.com/sites/$SiteName/_api/search/query?querytext='Path:https://cognizantonline.sharepoint.com/sites/$SiteName/SitePages/$($page.FieldValues.FileRef)'&refinementfilters='LastModifiedTime:range($($startDate.ToString("yyyy-MM-ddTHH:mm:ssZ")),$($endDate.ToString("yyyy-MM-ddTHH:mm:ssZ")))'"
+
+    # Invoke the REST API to get page view data
+    $pageViewData = Invoke-PnPSPRestMethod -Url $pageViewUrl -Method Get
+
+    # Check if there are results before accessing them
+    if ($pageViewData.PrimaryQueryResult.RelevantResults.Table.Rows.Count -gt 0) {
+        # Extract relevant information
+        $pageTitle = $page.FieldValues.Title
+        $pageUrl = $page.FieldValues.FileRef
+        $monthlyViews = $pageViewData.PrimaryQueryResult.RelevantResults.Table.Rows[0].Cells[6].Value  # Adjust index based on actual API response structure
+
+        Write-Host -ForegroundColor Yellow "Processing Site Page: $pageTitle"
+
+        # Create a custom object with the page information
+        $pageObject = [PSCustomObject]@{
+            "Page Title"    = $pageTitle
+            "Page URL"      = $pageUrl
+            "Monthly Views" = $monthlyViews
+        }
+
+        # Add the page object to the array
+        $pageInfo += $pageObject
+    } else {
+        Write-Host -ForegroundColor Red "No data found for page: $($page.FieldValues.Title)"
+    }
+
+    # Increment the row index
+    $rowIndex++
+}
+
+# Output the page information
+$pageInfo
+
